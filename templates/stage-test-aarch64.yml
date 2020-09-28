@@ -1,0 +1,47 @@
+stages:
+- stage: azure_linux_test
+  displayName: 'test-aarch64'
+  jobs:
+  - job:
+    strategy:
+      matrix:
+        Py36-C-Arm64-Linux:
+          python.version: '3.6'
+          image: 'ubuntu-latest'
+        Py37-C-Arm64-Linux:
+          python.version: '3.7'
+          image: 'ubuntu-latest'
+        Py38-C-Arm64-Linux:
+          python.version: '3.8'
+          image: 'ubuntu-latest'
+    pool:
+      vmImage: 'ubuntu-latest'
+
+    steps:
+    - checkout: self
+      submodules: true
+      clean: true
+
+    - script: docker run --rm --privileged hypriot/qemu-register
+      displayName: 'Registering qemu'
+    - script: |
+        set -xeo pipefail
+        docker run -v $(pwd):"${DOCKER_ROOT_DIRECTORY}":rw,z \
+                   -e HOST_USER_ID \
+                   -e CODECOV_TOKEN \
+                   "arm64v8/ubuntu:bionic" \
+                   bash -c "cd $DOCKER_ROOT_DIRECTORY;
+                   apt-get update -qq && apt-get install -qq make $PYTHON python3-pip lib$PYTHON-dev git && \
+                   $PYTHON -m pip install --upgrade pip setuptools wheel pytest-azurepipelines && \
+                   ${{ parameters.steps }}
+                   $PYTHON -m pytest tests -vv && \
+                   $PYTHON -m coverage xml && \
+                   if [ CODECOV_TOKEN != '' ]; then
+                    $PYTHON -m pip install codecov && $PYTHON -m codecov -f coverage.xml -X gcov
+                   fi;"
+      displayName: 'Running AArch64 build'
+      env:
+        CODECOV_TOKEN: $(codecov.token)
+        DOCKER_ROOT_DIRECTORY: "/home/source_root"
+        HOST_USER_ID: $(id -u)
+        PYTHON: "python$(python.version)"
